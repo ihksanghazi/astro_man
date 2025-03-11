@@ -8,6 +8,7 @@ FPS = 32
 frame_size_x = 289  # Lebar jendela permainan
 frame_size_y = 511  # Tinggi jendela permainan
 window_screen = pygame.display.set_mode((frame_size_x, frame_size_y))  # Membuat jendela permainan
+high_score = 0
 game_sprites = {}  # Dictionary untuk menyimpan gambar
 game_sounds = {}  # Dictionary untuk menyimpan suara
 player = 'gallery/sprites/astro.png'  # Path gambar pemain
@@ -25,6 +26,7 @@ def main_game():
     """Fungsi utama permainan"""
     player_x = int(frame_size_x / 5)  # Posisi awal pemain pada sumbu x
     player_y = int(frame_size_x / 2)  # Posisi awal pemain pada sumbu y
+    global high_score
     base_x = 0  # Posisi awal dasar permainan
     player_jump = False  # Status apakah pemain sedang melompat
     player_jump_acc = -8  # Kecepatan awal saat melompat
@@ -32,6 +34,7 @@ def main_game():
     player_max_vel_y = 10  # Kecepatan maksimum jatuh pemain
     player_acc_y = 1  # Percepatan gravitasi pemain
     pipe_vel_x = -4  # Kecepatan gerakan pipa ke kiri
+    score = 0
 
     # Menghasilkan dua pipa secara acak untuk permainan
     new_pipe_1 = get_random_pipe()  
@@ -60,7 +63,18 @@ def main_game():
                     player_vel_y = player_jump_acc  # Mengatur kecepatan lompatan
                     player_jump = True  # Menandai bahwa pemain sedang melompat
                     game_sounds['jump'].play()  # Memainkan suara lompatan
-
+        crash_test= is_collide(player_x, player_y, upper_pipes, lower_pipes)
+        if crash_test:
+            if score > high_score :
+                high_score = score
+            return score
+        player_mid_pos = player_x + game_sprites['player'].get_width()/2
+        for pipe in upper_pipes:
+            pipe_mid_pos = pipe['x'] + game_sprites['pipe'][0].get_width()/2
+            if pipe_mid_pos<= player_mid_pos < pipe_mid_pos +4:
+                score +=1
+                print(f"Your score is {score}")
+                game_sounds['point'].play()
         # Menambahkan percepatan gravitasi saat pemain jatuh
         if player_vel_y < player_max_vel_y and not player_jump:
             player_vel_y += player_acc_y  
@@ -98,9 +112,36 @@ def main_game():
         if upper_pipes[0]['x'] < -game_sprites['pipe'][0].get_width():
             upper_pipes.pop(0)
             lower_pipes.pop(0)
-
+        score_font = pygame.font.SysFont('Impact', 32)
+        score_surface = score_font.render(str(score), True,(255,255,255))
+        score_rect = score_surface.get_rect()
+        score_rect.midtop = (frame_size_x/2, 32)
+        window_screen.blit(score_surface, score_rect)
         pygame.display.update()
         fps_controller.tick(FPS)  # Mengontrol kecepatan permainan
+
+def game_over_screen(score):
+    global high_score
+    while True:
+        for event in pygame.event.get():
+            if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            elif event.type == KEYDOWN and (event.key == K_RETURN or event.key == K_UP):
+                return
+            else:
+                window_screen.blit(game_sprites['background'], (0, 0))
+                text_font = pygame.font.SysFont('Impact', 24)
+                game_over_surface = text_font.render("Game Over !", True, (255,255,255))
+                score_surface = text_font.render("Score : " + str(score), True, (255,255,255))
+                continue_surface = text_font.render("Press 'ENTER' To Continue !", True, (255,255,255))
+                high_score_surface = text_font.render("High Score : " + str(high_score), True, (255,255,255))
+                window_screen.blit(game_over_surface, (80, 100))
+                window_screen.blit(score_surface, (100, 170))
+                window_screen.blit(continue_surface, (20, 230))
+                window_screen.blit(high_score_surface, (80,430))
+                pygame.display.update()
+                fps_controller.tick(FPS)
 
 def welcome_screen():
     """Menampilkan layar awal permainan"""
@@ -131,18 +172,39 @@ def welcome_screen():
                 pygame.display.update()
                 fps_controller.tick(FPS)
 
+def is_collide(player_x, player_y, upper_pipes, lower_pipes):
+    """Fungsi untuk mendeteksi tabrakan pemain dengan pipa atau tanah."""
+    if player_y > frame_size_y * 0.7 or player_y < 0:  
+        game_sounds['hit'].play()  # Memainkan suara tabrakan
+        return True  # Mengembalikan True jika pemain menabrak tanah atau keluar layar atas
+
+    # Mengecek apakah pemain bertabrakan dengan pipa atas
+    for pipe in upper_pipes:
+        pipe_height = game_sprites['pipe'][0].get_height()  # Mendapatkan tinggi pipa
+        if(player_y < pipe_height + pipe['y'] and abs(player_x - pipe['x']) < game_sprites['pipe'][0].get_width()):
+            game_sounds['hit'].play()  # Memainkan suara tabrakan
+            return True  # Mengembalikan True jika bertabrakan dengan pipa atas
+
+    # Mengecek apakah pemain bertabrakan dengan pipa bawah
+    for pipe in lower_pipes:
+        if (player_y + game_sprites['player'].get_height() > pipe['y']) and abs(player_x - pipe['x']) < game_sprites['pipe'][0].get_width():
+            game_sounds['hit'].play()  # Memainkan suara tabrakan
+            return True  # Mengembalikan True jika bertabrakan dengan pipa bawah
+
+    return False  # Mengembalikan False jika tidak ada tabrakan
+
 def get_random_pipe():
-    """Menghasilkan posisi acak untuk pipa baru"""
-    pipe_height = game_sprites['pipe'][0].get_height()  # Mengambil tinggi sprite pipa
-    offset = frame_size_y / 3  # Menentukan batas acak pipa
-    y2 = offset + random.randrange(0, int(frame_size_y - game_sprites['base'].get_height() - 1.2 * offset))
-    y1 = pipe_height - y2 + offset
-    pipe_x = frame_size_x + 10
-    
-    # Mengembalikan dua pipa: satu atas dan satu bawah
+    """Menghasilkan posisi acak untuk pipa baru."""
+    pipe_height = game_sprites['pipe'][0].get_height()  # Mendapatkan tinggi sprite pipa
+    offset = frame_size_y / 3  # Menentukan jarak minimal antara pipa atas dan bawah
+    y2 = offset + random.randrange(0, int(frame_size_y - game_sprites['base'].get_height() - 1.2 * offset))  
+    y1 = pipe_height - y2 + offset  # Menyesuaikan posisi pipa atas agar sejajar dengan pipa bawah
+    pipe_x = frame_size_x + 10  # Menempatkan pipa di luar layar untuk muncul dari kanan
+
+    # Mengembalikan dua pipa dalam bentuk dictionary: satu pipa atas dan satu pipa bawah
     return [
-        {'x': pipe_x, 'y': -y1},  
-        {'x': pipe_x, 'y': y2}  
+        {'x': pipe_x, 'y': -y1},  # Pipa atas (negatif karena posisinya di atas layar)
+        {'x': pipe_x, 'y': y2}  # Pipa bawah
     ]
 
 # Memuat gambar ke dalam dictionary game_sprites
@@ -159,5 +221,6 @@ game_sounds['jump'] = pygame.mixer.Sound('gallery/audio/jump.wav')
 
 # Menjalankan permainan dalam loop utama
 while True:
-    welcome_screen()
-    main_game()
+    welcome_screen() # Menampilkan layar awal
+    score = main_game() # Memulai permainan utama dan mendapatkan skor
+    game_over_screen(score) # Menampilkan layar game over dan menunggu input untuk memulai ulang
